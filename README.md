@@ -40,7 +40,8 @@ khóa công khai ở [`keys/`](keys/).
 - Khóa chính RSA-4096 (chỉ chứng thực, không hết hạn) do chủ project giữ **ngoại tuyến**. CI chỉ có **khóa con ký**
   (hạn 2 năm) trong secret `PKG_GPG_SIGNING_KEY` của Environment `packages` (bắt buộc duyệt). Workflow từ chối
   chạy nếu secret chứa cả khóa chính. Tạo khóa: `tools/tao-khoa-gpg-kho.sh`.
-- `CLOUDFLARE_API_TOKEN` (Environment `packages`): token quyền **R2 Edit** chỉ cho bucket `pkg-tsudev`.
+- `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (Environment `packages`): khóa API S3 của token R2 quyền
+  **Object Read & Write** chỉ cho bucket `pkg-tsudev` (đẩy qua `aws s3api`, endpoint `<account>.r2.cloudflarestorage.com`).
 - Biến repo: `PKG_GPG_FINGERPRINT`, `CLOUDFLARE_ACCOUNT_ID`.
 
 ## Thêm một sản phẩm
