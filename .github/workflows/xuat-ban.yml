@@ -1,0 +1,103 @@
+name: xuat-ban
+# Moi 6 gio (va khi doi main): so goi can co voi kho dang phat hanh. Co ban moi -> job `xuat-ban`
+# chay trong Environment `packages` (CAN CHU PROJECT DUYET), ky bang khoa con, day len R2, roi cai
+# THAT tu https://pkg.tsudev.com. Hong -> mo Issue.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '41 */6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: xuat-ban
+  cancel-in-progress: false
+jobs:
+  kiem:
+    name: Co ban moi khong?
+    runs-on: ubuntu-24.04
+    outputs:
+      can: ${{ steps.so.outputs.can }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: so
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/dung_kho.py plan --out moi.json
+          curl -fsSL https://pkg.tsudev.com/manifest.json -o cu.json || echo '{"files":[]}' > cu.json
+          if [ "${{ github.event_name }}" != schedule ] || ! python3 -c 'import json,sys; sys.exit(json.load(open("moi.json"))["files"] != json.load(open("cu.json"))["files"])'; then
+            echo "can=true" >> "$GITHUB_OUTPUT"; echo "Can xuat ban"
+          else
+            echo "can=false" >> "$GITHUB_OUTPUT"; echo "Kho da moi nhat"
+          fi
+
+  xuat-ban:
+    name: Ky va day len pkg.tsudev.com
+    needs: kiem
+    # Chua co khoa (vars.PKG_GPG_FINGERPRINT rong) thi khong xuat ban.
+    if: needs.kiem.outputs.can == 'true' && vars.PKG_GPG_FINGERPRINT != ''
+    runs-on: ubuntu-24.04
+    environment: packages
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Cai cong cu
+        run: tools/cai-cong-cu.sh
+      - name: Nap khoa con ky
+        env:
+          PKG_GPG_SIGNING_KEY: ${{ secrets.PKG_GPG_SIGNING_KEY }}
+          FPR: ${{ vars.PKG_GPG_FINGERPRINT }}
+        run: |
+          test -n "$FPR" && test -s keys/tsudev-archive-keyring.gpg
+          gpg --show-keys --with-colons keys/tsudev-archive-keyring.gpg | grep -q "^fpr:::::::::$FPR:" \
+            || { echo "Van tay vars.PKG_GPG_FINGERPRINT khong khop keys/"; exit 1; }
+          printf '%s\n' "$PKG_GPG_SIGNING_KEY" | gpg --batch --import
+          gpg --list-secret-keys "$FPR" | grep -q '^sec#' || { echo "Secret chua ca khoa chinh - chi duoc nap khoa con"; exit 1; }
+      - name: Dung kho
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FPR: ${{ vars.PKG_GPG_FINGERPRINT }}
+        run: |
+          python3 tools/dung_kho.py build --out site --key "$FPR" --reuse-from https://pkg.tsudev.com
+          cmp keys/tsudev-archive-keyring.gpg site/tsudev-archive-keyring.gpg
+          gpgv --keyring site/tsudev-archive-keyring.gpg site/apt/dists/stable/InRelease
+          gpgv --keyring site/tsudev-archive-keyring.gpg site/rpm/repodata/repomd.xml.asc site/rpm/repodata/repomd.xml
+      - name: Day len R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: tools/day-len-r2.sh site
+      - name: Xoa khoa khoi runner
+        if: always()
+        run: rm -rf ~/.gnupg
+
+  kiem-cai-that:
+    name: Cai that ${{ matrix.image }}
+    needs: xuat-ban
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: 'ubuntu:24.04', kind: apt }
+          - { image: 'debian:12', kind: apt }
+          - { image: 'fedora:latest', kind: rpm }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: bash tools/kiem-cai.sh "${{ matrix.kind }}" https://pkg.tsudev.com
+
+  bao-loi:
+    name: Mo Issue khi cai that hong
+    needs: kiem-cai-that
+    if: failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create -R "${{ github.repository }}" --title "Cai that tu pkg.tsudev.com hong ($(date -u +%d/%m/%Y))" \
+            --body "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
