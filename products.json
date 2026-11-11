@@ -1,0 +1,5 @@
+{
+  "products": [
+    { "repo": "tsudev-org/tsudev-lotus", "ref": "main" }
+  ]
+}
