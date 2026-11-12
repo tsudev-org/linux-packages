@@ -1,5 +1,5 @@
 {
   "products": [
-    { "repo": "tsudev-org/tsudev-lotus", "ref": "main" }
+    { "repo": "tsudev-org/lotus-share", "ref": "main", "tenRieng": "lotus-share" }
   ]
 }
