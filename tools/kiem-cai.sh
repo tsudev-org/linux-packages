@@ -15,8 +15,10 @@ kiem_goi() {
   [ -x "/usr/bin/$p" ] || { echo "LOI: thieu /usr/bin/$p"; exit 1; }
   exe=$(readlink -f "/usr/bin/$p")
   echo "== $p -> $exe"
-  # Moi thu vien goi mang theo phai phan giai duoc (tru libdartjni: chi nap khi chay tren Android/JVM).
-  for lib in "$exe" $(find "$(dirname "$exe")" -name '*.so' ! -name 'libdartjni.so'); do
+  # Moi thu vien goi mang theo phai phan giai duoc, tru thu vien chi nap TUY CHON:
+  #   libdartjni.so - chi nap khi chay tren Android/JVM;
+  #   libcoreclrtraceptprovider.so - plugin LTTng cua .NET, coreclr dlopen va bo qua neu thieu liblttng-ust.
+  for lib in "$exe" $(find "$(dirname "$exe")" -name '*.so' ! -name 'libdartjni.so' ! -name 'libcoreclrtraceptprovider.so'); do
     if LD_LIBRARY_PATH="$(dirname "$exe")/lib" ldd "$lib" | grep 'not found'; then
       echo "LOI: $lib thieu thu vien"; exit 1
     fi
