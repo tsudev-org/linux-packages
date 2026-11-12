@@ -397,9 +397,106 @@ echo "deb [signed-by=/usr/share/keyrings/tsudev.gpg] https://pkg.tsudev.com/apt 
 sudo apt update &amp;&amp; sudo apt install &lt;tên-gói&gt;</pre>
 <h2>Fedora, RHEL</h2><pre>sudo curl -fsSLo /etc/yum.repos.d/tsudev.repo https://pkg.tsudev.com/rpm/tsudev.repo
 sudo dnf install &lt;tên-gói&gt;</pre>
-<h2>Gói hiện có</h2><ul>{rows}</ul></html>
+<h2>Gói hiện có</h2><ul>{rows}</ul>
+<p>Danh mục máy đọc (website, script cài đặt): <a href="/catalog.json"><code>catalog.json</code></a> - chỉ gồm gói đang có trong kho.</p></html>
 """
     (out / "index.html").write_text(html, encoding="utf-8")
+
+
+# ---------------------------------------------------------------- catalog.json (giao dien may doc)
+
+CATALOG_SCHEMA = 1
+LENH_THEM_KHO = {
+    "apt": [
+        f"curl -fsSL {BASE_URL}/tsudev-archive-keyring.gpg | sudo tee /usr/share/keyrings/tsudev.gpg >/dev/null",
+        f'echo "deb [signed-by=/usr/share/keyrings/tsudev.gpg] {BASE_URL}/apt stable main"'
+        " | sudo tee /etc/apt/sources.list.d/tsudev.list",
+        "sudo apt update",
+    ],
+    "dnf": [f"sudo curl -fsSLo /etc/yum.repos.d/tsudev.repo {BASE_URL}/rpm/tsudev.repo"],
+}
+
+
+def build_catalog(products: list[dict], plan: list[dict], fpr: str) -> dict:
+    """Danh muc goi DANG CO trong kho - nguon duy nhat cho website *.tsudev.com, install.sh cua tsudev.com
+    (PACKAGING.md muc 6, 8): chi goi da dung + ky moi vao day, nen khong hien lenh cho goi chua co.
+    Tat dinh (khong dau thoi gian chay) de day-len-r2.sh bo qua khi khong doi."""
+    pkgs = []
+    for m in products:
+        own = [p for p in plan if p["name"] == m["name"] and not p.get("transitional_for")]
+        if not own:
+            continue
+        newest = max(own, key=lambda p: p["published"])
+        latest = [p for p in own if p["tag"] == newest["tag"]]
+        versions = []
+        for p in sorted(own, key=lambda p: p["published"], reverse=True):
+            v = f"{p['version']}-{p['revision']}"
+            if v not in versions:
+                versions.append(v)
+        n = m["name"]
+        pkgs.append({
+            "name": n,
+            "version": f"{newest['version']}-{newest['revision']}",
+            "versions": versions,
+            "published": newest["published"],
+            "tag": newest["tag"],
+            "releaseRepo": m["release"]["repo"],
+            "homepage": m["homepage"],
+            "license": m["license"],
+            "description": m["description"],
+            "displayName": m["linux"].get("desktop", {}).get("name", n),
+            "command": m["linux"]["command"],
+            "formerNames": m["linux"].get("formerNames", []),
+            "arch": sorted(p["arch"] for p in latest),
+            "deb": {"arch": sorted(p["deb_arch"] for p in latest),
+                    "files": [f"{BASE_URL}/{deb_path(p)}" for p in latest]},
+            "rpm": {"arch": sorted(p["rpm_arch"] for p in latest),
+                    "files": [f"{BASE_URL}/{rpm_path(p)}" for p in latest]},
+            "install": {"apt": f"sudo apt install {n}", "dnf": f"sudo dnf install {n}"},
+            "installFull": {
+                "apt": " && ".join(LENH_THEM_KHO["apt"] + [f"sudo apt install {n}"]),
+                "dnf": " && ".join(LENH_THEM_KHO["dnf"] + [f"sudo dnf install {n}"]),
+            },
+        })
+    return {
+        "schema": CATALOG_SCHEMA,
+        "base": BASE_URL,
+        "updated": max((p["published"] for p in pkgs), default=None),
+        "key": {
+            "fingerprint": fpr.upper(),
+            "gpg": f"{BASE_URL}/tsudev-archive-keyring.gpg",
+            "asc": f"{BASE_URL}/tsudev-archive-keyring.asc",
+        },
+        "setup": LENH_THEM_KHO,
+        "packages": sorted(pkgs, key=lambda p: p["name"]),
+    }
+
+
+def check_catalog(site: Path) -> None:
+    """Moi goi trong catalog.json phai co that: ten + phien ban trong chi muc APT tung kien truc,
+    tep .rpm ton tai, va khop packages.txt (kiem-cai.sh cai dung danh sach nay)."""
+    cat = json.loads((site / "catalog.json").read_text(encoding="utf-8"))
+    loi = []
+    if cat.get("schema") != CATALOG_SCHEMA:
+        loi.append(f"schema {cat.get('schema')}")
+    names = [p["name"] for p in cat["packages"]]
+    txt = [x for x in (site / "packages.txt").read_text().split() if x]
+    if sorted(names) != sorted(txt):
+        loi.append(f"catalog {names} khac packages.txt {txt}")
+    for p in cat["packages"]:
+        for a in p["deb"]["arch"]:
+            idx = (site / f"apt/dists/stable/main/binary-{a}/Packages").read_text(encoding="utf-8")
+            if f"Package: {p['name']}\n" not in idx or not re.search(
+                    rf"Package: {re.escape(p['name'])}\n(?:[^\n]+\n)*?Version: {re.escape(p['version'])}\n", idx):
+                loi.append(f"{p['name']} {p['version']} thieu trong Packages ({a})")
+        for u in p["deb"]["files"] + p["rpm"]["files"]:
+            if not (site / u.removeprefix(BASE_URL + "/")).is_file():
+                loi.append(f"thieu tep {u}")
+        if p["version"] != p["versions"][0]:
+            loi.append(f"{p['name']}: version khong phai ban moi nhat")
+    if loi:
+        raise SystemExit("catalog.json sai:\n  " + "\n  ".join(loi))
+    log("catalog.json dung: " + ", ".join(p["name"] + " " + p["version"] for p in cat["packages"]))
 
 
 # ---------------------------------------------------------------- lenh
@@ -460,7 +557,10 @@ def cmd_build(args) -> None:
     # "<ten cu> <ten moi>" moi dong - tools/kiem-cai.sh kiem duong chuyen tu ten cu.
     (out / "chuyen-tiep.txt").write_text("".join(
         f"{cu} {m['name']}\n" for m in products for cu in m["linux"].get("formerNames", [])))
-    files = sorted(str(f.relative_to(out)) for f in out.rglob("*") if f.is_file())
+    (out / "catalog.json").write_text(
+        json.dumps(build_catalog(products, plan, args.key), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    check_catalog(out)
+    files =sorted(str(f.relative_to(out)) for f in out.rglob("*") if f.is_file())
     (out / "manifest.json").write_text(json.dumps({
         "files": sorted(f for p in plan for f in pkg_paths(p)),
         "all": files,
@@ -481,7 +581,11 @@ def main() -> None:
             s.add_argument("--key", required=True, help="van tay khoa ky (trong GNUPGHOME)")
             s.add_argument("--nfpm", default="nfpm")
             s.add_argument("--reuse-from", help=f"tai lai goi da phat hanh tu day, vd {BASE_URL}")
+    s = sub.add_parser("check-catalog", help="kiem catalog.json khop chi muc kho da dung")
+    s.add_argument("--site", required=True)
     args = ap.parse_args()
+    if args.cmd == "check-catalog":
+        return check_catalog(Path(args.site))
     {"plan": cmd_plan, "build": cmd_build}[args.cmd](args)
 
 

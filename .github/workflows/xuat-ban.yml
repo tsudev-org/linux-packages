@@ -1,12 +1,12 @@
 name: xuat-ban
-# Moi 6 gio (va khi doi main): so goi can co voi kho dang phat hanh. Co ban moi -> job `xuat-ban`
+# Moi gio (va khi doi main): so goi can co voi kho dang phat hanh (buoc kiem chi doc API, vai giay). Co ban moi -> job `xuat-ban`
 # chay trong Environment `packages` (CAN CHU PROJECT DUYET), ky bang khoa con, day len R2, roi cai
 # THAT tu https://pkg.tsudev.com. Hong -> mo Issue.
 on:
   push:
     branches: [main]
   schedule:
-    - cron: '41 */6 * * *'
+    - cron: '41 * * * *'
   workflow_dispatch:
 permissions:
   contents: read
@@ -61,6 +61,8 @@ jobs:
         run: |
           python3 tools/dung_kho.py build --out site --key "$FPR" --reuse-from https://pkg.tsudev.com
           cmp keys/tsudev-archive-keyring.gpg site/tsudev-archive-keyring.gpg
+          python3 -c 'import json,sys; sys.exit(json.load(open("site/catalog.json"))["key"]["fingerprint"] != sys.argv[1].upper())' "$FPR" \
+            || { echo "catalog.json ghi sai van tay khoa"; exit 1; }
           gpgv --keyring site/tsudev-archive-keyring.gpg site/apt/dists/stable/InRelease
           gpgv --keyring site/tsudev-archive-keyring.gpg site/rpm/repodata/repomd.xml.asc site/rpm/repodata/repomd.xml
       - name: Day len R2
@@ -74,20 +76,39 @@ jobs:
         run: rm -rf ~/.gnupg
 
   kiem-cai-that:
-    name: Cai that ${{ matrix.image }}
+    # Cai THAT tu https://pkg.tsudev.com tren du 5 ban phan phoi nhu CI cua PR, va tren may ARM64 (chi goi co
+    # ban arm64 - doc tu catalog.json dang phat hanh).
+    name: Cai that ${{ matrix.image }} ${{ matrix.runner == 'ubuntu-24.04-arm' && 'arm64' || '' }}
     needs: xuat-ban
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     container: ${{ matrix.image }}
     strategy:
       fail-fast: false
       matrix:
+        runner: [ubuntu-24.04]
+        image: ['ubuntu:24.04', 'ubuntu:22.04', 'debian:12', 'debian:13', 'fedora:latest']
         include:
-          - { image: 'ubuntu:24.04', kind: apt }
-          - { image: 'debian:12', kind: apt }
-          - { image: 'fedora:latest', kind: rpm }
+          - { runner: ubuntu-24.04-arm, image: 'ubuntu:24.04' }
+          - { runner: ubuntu-24.04-arm, image: 'debian:12' }
+          - { runner: ubuntu-24.04-arm, image: 'fedora:latest' }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: bash tools/kiem-cai.sh "${{ matrix.kind }}" https://pkg.tsudev.com
+      - name: Cai that tu pkg.tsudev.com
+        shell: bash
+        run: |
+          case "${{ matrix.image }}" in fedora*) kind=rpm ;; *) kind=apt ;; esac
+          if [ $kind = apt ]; then
+            apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 curl ca-certificates >/dev/null
+          else
+            dnf install -y -q python3 curl findutils >/dev/null
+          fi
+          arch=$(uname -m)
+          mapfile -t pkgs < <(curl -fsSL https://pkg.tsudev.com/catalog.json | python3 -c '
+          import json, sys
+          a = {"x86_64": "x64", "aarch64": "arm64"}[sys.argv[1]]
+          print("\n".join(p["name"] for p in json.load(sys.stdin)["packages"] if a in p["arch"]))' "$arch")
+          if [ ${#pkgs[@]} -eq 0 ]; then echo "::notice::Khong co goi $arch - bo qua"; exit 0; fi
+          bash tools/kiem-cai.sh $kind https://pkg.tsudev.com "${pkgs[@]}"
 
   bao-loi:
     name: Mo Issue khi cai that hong

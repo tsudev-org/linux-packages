@@ -30,10 +30,23 @@ khóa công khai ở [`keys/`](keys/).
 | --- | --- |
 | `products.json` | Danh sách repo sản phẩm. Mỗi repo khai báo gói ở `packaging/package.json` (mục 3); repo có kênh `apt`/`rpm` trong `channels` hoặc `planned` và có tệp `linux-*` dạng `tar` thì được đóng gói |
 | `tools/dung_kho.py` | `plan`: liệt kê gói cần có (3 bản phát hành mới nhất mỗi sản phẩm). `build`: tải, kiểm SHA-256, nfpm, `rpmsign`, `apt-ftparchive`, `createrepo_c`, ký `InRelease` / `Release.gpg` / `repomd.xml.asc`. Gói đã phát hành được tải lại nguyên vẹn, không dựng lại |
+| `catalog.json` (sinh khi dựng) | Danh mục máy đọc tại `https://pkg.tsudev.com/catalog.json` - xem mục dưới |
 | `tools/day-len-r2.sh` | Đẩy lên R2 theo thứ tự an toàn (gói → siêu dữ liệu → chỉ mục đã ký → `manifest.json`), xóa gói cũ ngoài 3 bản |
 | `tools/kiem-cai.sh` | Cài **thật** bằng đúng lệnh trên website trong container sạch, kiểm thư viện, gỡ sạch |
 | `.github/workflows/ci.yml` | Mỗi PR: dựng toàn bộ kho bằng khóa tạm, cài thử trên Ubuntu 22.04/24.04, Debian 12/13, Fedora |
-| `.github/workflows/xuat-ban.yml` | Mỗi 6 giờ: có bản phát hành mới thì xin duyệt Environment `packages`, ký bằng khóa con, đẩy R2, cài thật từ `pkg.tsudev.com` (hỏng thì mở Issue) |
+| `.github/workflows/xuat-ban.yml` | Mỗi giờ: có bản phát hành mới thì xin duyệt Environment `packages`, ký bằng khóa con, đẩy R2, cài thật từ `pkg.tsudev.com` trên 5 bản phân phối + ARM64 (hỏng thì mở Issue) |
+
+## `catalog.json` - nguồn cho website và script cài đặt
+
+`https://pkg.tsudev.com/catalog.json` (schema 1) liệt kê **chỉ gói đang có trong kho**: tên, phiên bản mới nhất và
+các bản giữ lại, kiến trúc (`x64`/`arm64`, `deb.arch`, `rpm.arch`), mô tả vi/en, `homepage`, `formerNames`, lệnh
+`install.apt` / `install.dnf`, lệnh đầy đủ kể cả thêm kho (`installFull`), lệnh thêm kho (`setup`) và vân tay khóa ký.
+Dựng kho tự kiểm `catalog.json` khớp chỉ mục APT và tệp `.rpm` (`dung_kho.py check-catalog`); CI và bước cài thật
+sau xuất bản đọc danh sách gói từ đây.
+
+Website `*.tsudev.com` và `install.sh` của tsudev.com (PACKAGING.md mục 6, 8) đọc tệp này **lúc build** để hiện
+khối "Cài bằng lệnh" - không gõ tay tên gói, nên không bao giờ hiện lệnh cho gói chưa có. Thêm trường thì giữ
+`schema: 1`; đổi/bỏ trường thì tăng `schema`.
 
 ## Tên gói và đổi tên
 
