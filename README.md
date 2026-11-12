@@ -66,6 +66,10 @@ khối "Cài bằng lệnh" - không gõ tay tên gói, nên không bao giờ hi
 - `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (Environment `packages`): khóa API S3 của token R2 quyền
   **Object Read & Write** chỉ cho bucket `pkg-tsudev` (đẩy qua `aws s3api`, endpoint `<account>.r2.cloudflarestorage.com`).
 - Biến repo: `PKG_GPG_FINGERPRINT`, `CLOUDFLARE_ACCOUNT_ID`.
+- **Xoay khóa (khóa chính hoặc khóa con mới làm đổi `keys/tsudev-archive-keyring.{gpg,asc}`)**: `install.sh` của
+  tsudev.com ghim SHA-256 hai tệp này (`PIN_GPG_SHA256`, `PIN_ASC_SHA256`, repo `tsudev`) và sẽ **từ chối cài** khi
+  khóa đổi - đúng thiết kế. Trước khi xuất bản khóa mới: mở PR ở repo `tsudev` cập nhật hai giá trị đó (và vân tay ở
+  `tsudev.com/apps`), deploy, rồi mới merge khóa mới ở đây. Mã băm: `sha256sum keys/tsudev-archive-keyring.*`.
 
 ## Thêm một sản phẩm
 
