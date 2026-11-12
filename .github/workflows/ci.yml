@@ -92,6 +92,7 @@ jobs:
           name: site
           path: site
       - name: Phuc vu kho cuc bo va cai that
+        shell: bash  # container: mac dinh la sh (khong co mang)
         run: |
           test "$(uname -m)" = aarch64
           # Chi goi co ban arm64 (goi chuyen tiep cung arch voi goi moi nen kiem-cai.sh tu kiem duong doi ten).
