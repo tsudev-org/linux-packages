@@ -44,11 +44,15 @@ if [ "$kind" = apt ]; then
   mapfile -t chuyen < <(curl -fsSL "$base/chuyen-tiep.txt" 2>/dev/null || true)
   if [ -n "${NANG_CAP_TU:-}" ] && [ ${#chuyen[@]} -gt 0 ]; then
     them_kho "$NANG_CAP_TU"
-    for d in "${chuyen[@]}"; do read -r cu moi <<<"$d"; apt-get install -y "$cu"; done
+    for d in "${chuyen[@]}"; do
+      read -r cu moi <<<"$d"; apt-get install -y "$cu"
+      # Sau khi kho da xuat ban ban chuyen tiep, nguon khong con ban cu that: van kiem duoc ket qua cuoi.
+      if dpkg -s "$moi" >/dev/null 2>&1; then echo "CANH BAO: $NANG_CAP_TU khong con $cu ban cu - chi kiem trang thai cuoi"; fi
+    done
   fi
   them_kho "$base"
   for p in "${pkgs[@]}"; do
-    if [ -n "${NANG_CAP_TU:-}" ] && dpkg -s "$p" >/dev/null 2>&1; then continue; fi
+    [ -z "${NANG_CAP_TU:-}" ] || break  # che do nang cap: chi kiem duong chuyen (lan chay thuong da kiem goi)
     apt-get install -y "$p"
     kiem_goi "$p"
     apt-get remove -y --purge "$p"
@@ -73,17 +77,21 @@ else
     # --- lenh tren website (gpgcheck=1 + repo_gpgcheck=1: dnf tu choi goi/sieu du lieu khong ky dung khoa) ---
     curl -fsSLo /etc/yum.repos.d/tsudev.repo "$1/rpm/tsudev.repo"
     sed -i "s#https://pkg.tsudev.com#$1#g" /etc/yum.repos.d/tsudev.repo
-    dnf clean all -q
+    # Cung ma kho "tsudev" khi doi goc kho: bo sieu du lieu dem, khong thi dnf dung lai kho truoc.
+    dnf clean all && dnf makecache --refresh
   }
   [ ${#pkgs[@]} -gt 0 ] || mapfile -t pkgs < <(curl -fsSL "$base/packages.txt")
   mapfile -t chuyen < <(curl -fsSL "$base/chuyen-tiep.txt" 2>/dev/null || true)
   if [ -n "${NANG_CAP_TU:-}" ] && [ ${#chuyen[@]} -gt 0 ]; then
     them_kho "$NANG_CAP_TU"
-    for d in "${chuyen[@]}"; do read -r cu moi <<<"$d"; dnf install -y "$cu"; done
+    for d in "${chuyen[@]}"; do
+      read -r cu moi <<<"$d"; dnf install -y "$cu"
+      rpm -q "$cu" >/dev/null || echo "CANH BAO: $NANG_CAP_TU khong con $cu ban cu - chi kiem trang thai cuoi"
+    done
   fi
   them_kho "$base"
   for p in "${pkgs[@]}"; do
-    if [ -n "${NANG_CAP_TU:-}" ] && rpm -q "$p" >/dev/null 2>&1; then continue; fi
+    [ -z "${NANG_CAP_TU:-}" ] || break  # cai goi moi o day se Obsoletes luon ten cu truoc buoc `dnf upgrade`
     dnf install -y "$p"
     kiem_goi "$p"
     dnf remove -y "$p"
