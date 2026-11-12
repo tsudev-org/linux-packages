@@ -71,3 +71,43 @@ jobs:
           if [ -s site/chuyen-tiep.txt ]; then
             NANG_CAP_TU=https://pkg.tsudev.com bash tools/kiem-cai.sh "${{ matrix.kind }}" http://localhost:8080
           fi
+
+  cai-thu-arm64:
+    # Goi arm64 cai THAT tren may ARM64 (ban phat hanh co tep linux-arm64). Chua co goi arm64 nao -> bao va bo qua.
+    name: Cai thu arm64 ${{ matrix.image }}
+    needs: dung-thu
+    runs-on: ubuntu-24.04-arm
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: 'ubuntu:24.04', kind: apt }
+          - { image: 'debian:12', kind: apt }
+          - { image: 'fedora:latest', kind: rpm }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: site
+      - name: Phuc vu kho cuc bo va cai that
+        shell: bash  # container: mac dinh la sh (khong co mang)
+        run: |
+          test "$(uname -m)" = aarch64
+          # Chi goi co ban arm64 (goi chuyen tiep cung arch voi goi moi nen kiem-cai.sh tu kiem duong doi ten).
+          pkgs=()
+          while read -r p; do
+            if [ -n "$(find site/apt/pool -name "${p}_*_arm64.deb" -print -quit)" ]; then pkgs+=("$p"); fi
+          done < site/packages.txt
+          if [ ${#pkgs[@]} -eq 0 ]; then
+            echo "::notice::Chua co goi arm64 (ban phat hanh chua co tep linux-arm64) - bo qua"; exit 0
+          fi
+          if [ "${{ matrix.kind }}" = apt ]; then
+            apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 >/dev/null
+          else
+            dnf install -y -q python3 findutils >/dev/null
+          fi
+          (cd site && nohup python3 -m http.server 8080 >/dev/null 2>&1 &)
+          sleep 2
+          bash tools/kiem-cai.sh "${{ matrix.kind }}" http://localhost:8080 "${pkgs[@]}"
