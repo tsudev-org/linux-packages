@@ -97,14 +97,24 @@ def load_manifest(entry: dict, manifest_dir: Path | None) -> dict:
     return json.loads(http_get(url))
 
 
-def validate(m: dict) -> None:
+TEN_GOI = r"tsudev-[a-z0-9-]+"
+
+
+def validate(m: dict, entry: dict) -> None:
     for k in ("schema", "name", "homepage", "license", "description", "release", "assets", "linux"):
         if k not in m:
             raise SystemExit(f"package.json cua {m.get('name')} thieu truong {k}")
     if m["schema"] != 1:
         raise SystemExit(f"{m['name']}: schema {m['schema']} chua ho tro")
-    if not re.fullmatch(r"tsudev-[a-z0-9-]+", m["name"]):
+    # Ten rieng (khong tien to tsudev-) chi khi products.json ghi dich danh `tenRieng` cho dung repo do:
+    # thay doi phai qua PR cua repo nay (san pham co thuong hieu rieng, vd Lotus Share).
+    if not re.fullmatch(TEN_GOI, m["name"]) and not (
+            entry.get("tenRieng") == m["name"] and re.fullmatch(r"[a-z][a-z0-9-]+", m["name"])):
         raise SystemExit(f"ten goi sai khuon PACKAGING.md muc 2: {m['name']}")
+    for cu in m["linux"].get("formerNames", []):
+        # Ten cu = ma da cong bo (PACKAGING.md muc 2: MUST NOT bo) -> giu bang goi chuyen tiep.
+        if not re.fullmatch(TEN_GOI, cu) or cu == m["name"]:
+            raise SystemExit(f"{m['name']}: linux.formerNames khong hop le: {cu}")
     if not re.fullmatch(r"[a-z0-9-]+", m["linux"]["command"]):
         raise SystemExit(f"{m['name']}: linux.command khong hop le")
 
@@ -154,11 +164,25 @@ def plan_product(m: dict, keep: int) -> list[dict]:
                 "rpm": f"{m['name']}-{version}-{revision}.{rpm_arch}.rpm",
                 "deb_arch": deb_arch, "rpm_arch": rpm_arch,
             })
+        if pkgs and not out:
+            # Ban moi nhat: them goi chuyen tiep cho moi ten cu (chi .deb; rpm dung Provides/Obsoletes).
+            for p in list(pkgs):
+                for cu in m["linux"].get("formerNames", []):
+                    pkgs.append({**p, "name": cu, "transitional_for": m["name"], "formats": ["deb"],
+                                 "deb": f"{cu}_{version}-{revision}_{p['deb_arch']}.deb", "rpm": None})
         if pkgs:
             out.extend(pkgs)
             if len({p["tag"] for p in out}) >= keep:
                 break
     return out
+
+
+def formats(p: dict) -> list[str]:
+    return p.get("formats", ["deb", "rpm"])
+
+
+def pkg_paths(p: dict) -> list[str]:
+    return [deb_path(p) if f == "deb" else rpm_path(p) for f in formats(p)]
 
 
 def deb_path(p: dict) -> str:
@@ -199,6 +223,31 @@ def sums_lookup(sums: bytes, fname: str) -> str | None:
         if len(parts) >= 2 and parts[-1].lstrip("*").lstrip("./") == fname:
             return parts[0].lower()
     return None
+
+
+def build_transitional(m: dict, p: dict, work: Path, out: Path, nfpm: str) -> None:
+    """Goi .deb rong ten cu, phu thuoc goi moi: `apt upgrade` tu cai goi moi va go tep cua goi cu."""
+    stage = work / f"stage-{p['name']}-{p['version']}-{p['arch']}"
+    stage.mkdir(parents=True)
+    new = p["transitional_for"]
+    cfg = {
+        "name": p["name"], "arch": p["deb_arch"], "platform": "linux",
+        "version": p["version"], "release": p["revision"], "version_schema": "none",
+        "maintainer": MAINTAINER, "vendor": "tsudev", "homepage": m["homepage"], "license": m["license"],
+        "description": f"transitional package - renamed to {new}\n"
+                       f"This package moves existing installations to {new}. It can be removed safely.",
+        "mtime": datetime.fromisoformat(p["published"].replace("Z", "+00:00")).isoformat(),
+        "depends": [f"{new} (>= {p['version']}-{p['revision']})"],
+        "section": "oldlibs", "priority": "optional",
+    }
+    cfg_path = stage / "nfpm.json"
+    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=1), encoding="utf-8")
+    dst = out / deb_path(p)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    run([nfpm, "package", "--config", str(cfg_path), "--packager", "deb", "--target", str(dst)])
+    if not dst.exists():
+        raise SystemExit(f"nfpm khong tao {dst}")
+    shutil.rmtree(stage)
 
 
 def build_one(m: dict, p: dict, work: Path, out: Path, nfpm: str) -> None:
@@ -243,7 +292,13 @@ def build_one(m: dict, p: dict, work: Path, out: Path, nfpm: str) -> None:
         "deb": {"fields": {}},
         "overrides": {
             "deb": {"depends": lx["deb"]["depends"]},
-            "rpm": {"depends": lx["rpm"]["depends"]},
+            "rpm": {
+                "depends": lx["rpm"]["depends"],
+                # Doi ten goi (Fedora Packaging Guidelines, "Renaming/Replacing"): dnf upgrade tu thay goi cu.
+                # nfpm: `replaces` cua rpm = Obsoletes.
+                "provides": [f"{cu} = {p['version']}-{p['revision']}" for cu in lx.get("formerNames", [])],
+                "replaces": [f"{cu} < {p['version']}-{p['revision']}" for cu in lx.get("formerNames", [])],
+            },
         },
         "section": lx["deb"].get("section", "misc"), "priority": "optional",
         "rpm": {"group": lx["rpm"].get("group", "Applications/System"), "summary": m["linux"]["desktop"]["genericName"]["en"]},
@@ -326,8 +381,11 @@ def publish_keys(out: Path, key: str) -> None:
 
 
 def write_index(out: Path, products: list[dict], fpr: str) -> None:
+    def cu(m: dict) -> str:
+        old = m["linux"].get("formerNames", [])
+        return f" (tên cũ {', '.join(f'<code>{o}</code>' for o in old)} tự chuyển khi cập nhật)" if old else ""
     rows = "".join(
-        f"<li><code>{m['name']}</code> - {m['description']['vi']} (<a href=\"{m['homepage']}\">{m['homepage']}</a>)</li>"
+        f"<li><code>{m['name']}</code> - {m['description']['vi']} (<a href=\"{m['homepage']}\">{m['homepage']}</a>){cu(m)}</li>"
         for m in products)
     html = f"""<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kho goi tsudev</title><style>body{{font:16px/1.6 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem;background:#0b0b0f;color:#e7e7ea}}
@@ -352,7 +410,7 @@ def collect(args) -> tuple[list[dict], list[dict]]:
     products, plan = [], []
     for e in entries:
         m = load_manifest(e, mdir)
-        validate(m)
+        validate(m, e)
         if not wants_linux(m):
             log(f"bo qua {m['name']}: khong khai bao kenh apt/rpm")
             continue
@@ -363,7 +421,7 @@ def collect(args) -> tuple[list[dict], list[dict]]:
 
 def cmd_plan(args) -> None:
     products, plan = collect(args)
-    files = sorted([deb_path(p) for p in plan] + [rpm_path(p) for p in plan])
+    files = sorted(f for p in plan for f in pkg_paths(p))
     Path(args.out).write_text(json.dumps({"files": files}, indent=1) + "\n")
     log(f"{len(files)} goi")
 
@@ -381,13 +439,15 @@ def cmd_build(args) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
         for p in plan:
-            reuse = args.reuse_from and all(
-                http_exists(f"{args.reuse_from}/{r}") for r in (deb_path(p), rpm_path(p)))
+            paths = pkg_paths(p)
+            reuse = args.reuse_from and all(http_exists(f"{args.reuse_from}/{r}") for r in paths)
             if reuse:
-                for r in (deb_path(p), rpm_path(p)):
+                for r in paths:
                     (out / r).parent.mkdir(parents=True, exist_ok=True)
                     (out / r).write_bytes(http_get(f"{args.reuse_from}/{r}"))
-                log(f"giu nguyen {p['deb']}, {p['rpm']} (da phat hanh)")
+                log(f"giu nguyen {', '.join(paths)} (da phat hanh)")
+            elif p.get("transitional_for"):
+                build_transitional(byname[p["transitional_for"]], p, work, out, args.nfpm)
             else:
                 build_one(byname[p["name"]], p, work, out, args.nfpm)
                 rebuilt_rpm.append(out / rpm_path(p))
@@ -397,9 +457,12 @@ def cmd_build(args) -> None:
     publish_keys(out, args.key)
     write_index(out, products, args.key)
     (out / "packages.txt").write_text("".join(f"{m['name']}\n" for m in products))
+    # "<ten cu> <ten moi>" moi dong - tools/kiem-cai.sh kiem duong chuyen tu ten cu.
+    (out / "chuyen-tiep.txt").write_text("".join(
+        f"{cu} {m['name']}\n" for m in products for cu in m["linux"].get("formerNames", [])))
     files = sorted(str(f.relative_to(out)) for f in out.rglob("*") if f.is_file())
     (out / "manifest.json").write_text(json.dumps({
-        "files": sorted([deb_path(p) for p in plan] + [rpm_path(p) for p in plan]),
+        "files": sorted(f for p in plan for f in pkg_paths(p)),
         "all": files,
         "sha256": {f: sha256(out / f) for f in files},
     }, indent=1) + "\n")

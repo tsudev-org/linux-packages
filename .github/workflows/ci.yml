@@ -64,3 +64,10 @@ jobs:
           (cd site && nohup python3 -m http.server 8080 >/dev/null 2>&1 &)
           sleep 2
           bash tools/kiem-cai.sh "${{ matrix.kind }}" http://localhost:8080 $(cat site/packages.txt)
+      - name: Nang cap tu kho dang phat hanh (doi ten goi)
+        # Cai ten cu tu https://pkg.tsudev.com roi nang cap len kho vua dung: `apt upgrade` / `dnf upgrade`
+        # phai tu chuyen sang ten moi (goi chuyen tiep / Obsoletes) - dung duong may nguoi dung da cai di.
+        run: |
+          if [ -s site/chuyen-tiep.txt ]; then
+            NANG_CAP_TU=https://pkg.tsudev.com bash tools/kiem-cai.sh "${{ matrix.kind }}" http://localhost:8080
+          fi
