@@ -42,6 +42,8 @@ jobs:
     environment: packages
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Khoa khop ghim trong install.sh cua tsudev.com
+        run: tools/kiem-ghim-khoa.sh
       - name: Cai cong cu
         run: tools/cai-cong-cu.sh
       - name: Nap khoa con ky
