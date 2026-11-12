@@ -18,11 +18,18 @@ kiem_goi() {
   # Moi thu vien goi mang theo phai phan giai duoc, tru thu vien chi nap TUY CHON:
   #   libdartjni.so - chi nap khi chay tren Android/JVM;
   #   libcoreclrtraceptprovider.so - plugin LTTng cua .NET, coreclr dlopen va bo qua neu thieu liblttng-ust.
+  # Kiem HET roi moi dung: bao du danh sach thu vien thieu (de repo san pham sua phu thuoc mot lan).
+  local thieu=""
   for lib in "$exe" $(find "$(dirname "$exe")" -name '*.so' ! -name 'libdartjni.so' ! -name 'libcoreclrtraceptprovider.so'); do
     if LD_LIBRARY_PATH="$(dirname "$exe")/lib" ldd "$lib" | grep 'not found'; then
-      echo "LOI: $lib thieu thu vien"; exit 1
+      echo "LOI: $lib thieu thu vien"
+      thieu+=" $(LD_LIBRARY_PATH="$(dirname "$exe")/lib" ldd "$lib" | awk '/not found/{print $1}' | tr '\n' ' ')"
     fi
   done
+  if [ -n "$thieu" ]; then
+    echo "LOI: $p thieu thu vien he thong (khai bao vao linux.deb/rpm.depends):$(tr ' ' '\n' <<<"$thieu" | sort -u | tr '\n' ' ')"
+    exit 1
+  fi
   [ -f "/usr/share/applications/$p.desktop" ] || { echo "LOI: thieu .desktop"; exit 1; }
 }
 
