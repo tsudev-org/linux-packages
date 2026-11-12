@@ -117,6 +117,18 @@ def validate(m: dict, entry: dict) -> None:
             raise SystemExit(f"{m['name']}: linux.formerNames khong hop le: {cu}")
     if not re.fullmatch(r"[a-z0-9-]+", m["linux"]["command"]):
         raise SystemExit(f"{m['name']}: linux.command khong hop le")
+    for ten, dich in m["linux"].get("links", {}).items():
+        # Lenh phu trong /usr/bin (vd ten goc cua ban upstream): cung khuon ten lenh, dich la tep trong goi.
+        if not re.fullmatch(r"[a-z0-9-]+", ten) or ten == m["linux"]["command"] or not duong_dan_an_toan(dich):
+            raise SystemExit(f"{m['name']}: linux.links khong hop le: {ten} -> {dich}")
+    ex = m["linux"].get("desktop", {}).get("exec")
+    if ex is not None and not re.fullmatch(r"[A-Za-z0-9._/-]+( [A-Za-z0-9%._=-]+)*", ex):
+        raise SystemExit(f"{m['name']}: linux.desktop.exec khong hop le: {ex}")
+
+
+def duong_dan_an_toan(p: str) -> bool:
+    """Duong dan tuong doi trong goi, khong thoat ra ngoai."""
+    return bool(p) and not p.startswith("/") and ".." not in p.split("/") and re.fullmatch(r"[A-Za-z0-9._/-]+", p) is not None
 
 
 def wants_linux(m: dict) -> bool:
@@ -126,6 +138,11 @@ def wants_linux(m: dict) -> bool:
 
 def py_regex(r: str) -> re.Pattern:
     return re.compile(r.replace("(?<", "(?P<"))
+
+
+def fill(s: str, version: str, tag: str) -> str:
+    """Bien trong ten tep package.json: {version} (nhom `version` cua tagRegex), {tagVersion} (nhan bo `v` dau)."""
+    return s.replace("{version}", version).replace("{tagVersion}", tag.removeprefix("v"))
 
 
 def plan_product(m: dict, keep: int) -> list[dict]:
@@ -151,15 +168,18 @@ def plan_product(m: dict, keep: int) -> list[dict]:
             arch = key.removeprefix("linux-")
             if arch not in ARCH:
                 continue
-            fname = a["file"].replace("{version}", version)
+            fname = fill(a["file"], version, r["tag_name"])
             if fname not in names:
                 continue
+            # Tong kiem rieng cua tep (assets.<k>.sums) uu tien hon tong kiem chung cua Release (release.sums).
+            sums_name = fill(a.get("sums") or rel.get("sums", ""), version, r["tag_name"])
             deb_arch, rpm_arch = ARCH[arch]
             pkgs.append({
                 "name": m["name"], "version": version, "revision": revision, "arch": arch,
                 "tag": r["tag_name"], "published": r["published_at"],
                 "asset": fname, "asset_url": names[fname],
-                "sums_url": names.get(rel.get("sums", "")),
+                "sums_url": names.get(sums_name),
+                "root": fill(a.get("root", ""), version, r["tag_name"]),
                 "deb": f"{m['name']}_{version}-{revision}_{deb_arch}.deb",
                 "rpm": f"{m['name']}-{version}-{revision}.{rpm_arch}.rpm",
                 "deb_arch": deb_arch, "rpm_arch": rpm_arch,
@@ -195,14 +215,27 @@ def rpm_path(p: dict) -> str:
 
 # ---------------------------------------------------------------- dong goi
 
-def desktop_entry(m: dict) -> str:
+def desktop_exec(m: dict, root: Path) -> str:
+    """Exec cua .desktop: mac dinh `<lenh> %U`; `desktop.exec` tro toi tep trong goi thi doi sang duong dan /opt."""
+    ex = m["linux"]["desktop"].get("exec")
+    if not ex:
+        return f"{m['linux']['command']} %U"
+    prog, *rest = ex.split(" ")
+    if (root / prog).is_file():
+        prog = f"/opt/{m['name']}/{prog}"
+    elif prog not in {m["linux"]["command"], *m["linux"].get("links", {})}:
+        raise SystemExit(f"{m['name']}: desktop.exec tro toi {prog} - khong co trong goi va khong phai lenh cua goi")
+    return " ".join([prog, *rest])
+
+
+def desktop_entry(m: dict, exec_line: str) -> str:
     d = m["linux"]["desktop"]
     gn = d.get("genericName", {})
     lines = [
         "[Desktop Entry]", "Type=Application", f"Name={d['name']}",
         f"GenericName={gn.get('en', '')}", f"GenericName[vi]={gn.get('vi', '')}",
         f"Comment={m['description']['en']}", f"Comment[vi]={m['description']['vi']}",
-        f"Exec={m['linux']['command']} %U", f"Icon={m['name']}", "Terminal=false",
+        f"Exec={exec_line}", f"Icon={m['name']}", "Terminal=false",
         "Categories=" + "".join(c + ";" for c in d.get("categories", [])),
         "Keywords=" + "".join(k + ";" for k in d.get("keywords", [])),
         "StartupNotify=true",
@@ -263,23 +296,33 @@ def build_one(m: dict, p: dict, work: Path, out: Path, nfpm: str) -> None:
     log(f"SHA-256 khop: {p['asset']}")
 
     stage = work / f"stage-{p['name']}-{p['version']}-{p['arch']}"
-    (stage / "root").mkdir(parents=True)
-    safe_extract(dl, stage / "root")
+    (stage / "tar").mkdir(parents=True)
+    safe_extract(dl, stage / "tar")
+    # `root`: thu muc goc ben trong tar (vd tsudev-files-<tag>-linux-x64/) - noi dung cua no vao /opt/<goi>.
+    if p.get("root") and not duong_dan_an_toan(p["root"]):
+        raise SystemExit(f"{p['asset']}: root khong hop le: {p['root']}")
+    root = stage / "tar" / p["root"] if p.get("root") else stage / "tar"
+    if not root.is_dir():
+        raise SystemExit(f"{p['asset']} khong co thu muc {p['root']}")
     lx = m["linux"]
     bin_rel = m["assets"][f"linux-{p['arch']}"]["bin"]
-    if not (stage / "root" / bin_rel).is_file():
+    if not (root / bin_rel).is_file():
         raise SystemExit(f"{p['asset']} khong co tep chay {bin_rel}")
-    (stage / f"{m['name']}.desktop").write_text(desktop_entry(m), encoding="utf-8")
+    (stage / f"{m['name']}.desktop").write_text(desktop_entry(m, desktop_exec(m, root)), encoding="utf-8")
 
     opt = f"/opt/{m['name']}"
     contents = [
-        {"src": str(stage / "root"), "dst": opt, "type": "tree"},
+        {"src": str(root), "dst": opt, "type": "tree"},
         {"src": f"{opt}/{bin_rel}", "dst": f"/usr/bin/{lx['command']}", "type": "symlink"},
         {"src": str(stage / f"{m['name']}.desktop"), "dst": f"/usr/share/applications/{m['name']}.desktop",
          "file_info": {"mode": 0o644}},
     ]
-    if lx.get("icon") and (stage / "root" / lx["icon"]).is_file():
-        contents.append({"src": str(stage / "root" / lx["icon"]),
+    for ten, dich in lx.get("links", {}).items():
+        if not (root / dich).is_file():
+            raise SystemExit(f"{p['asset']}: linux.links {ten} -> {dich} khong co trong goi")
+        contents.append({"src": f"{opt}/{dich}", "dst": f"/usr/bin/{ten}", "type": "symlink"})
+    if lx.get("icon") and (root / lx["icon"]).is_file():
+        contents.append({"src": str(root / lx["icon"]),
                          "dst": f"/usr/share/icons/hicolor/512x512/apps/{m['name']}.png", "file_info": {"mode": 0o644}})
     mtime = datetime.fromisoformat(p["published"].replace("Z", "+00:00")).isoformat()
     cfg = {
@@ -446,6 +489,7 @@ def build_catalog(products: list[dict], plan: list[dict], fpr: str) -> dict:
             "description": m["description"],
             "displayName": m["linux"].get("desktop", {}).get("name", n),
             "command": m["linux"]["command"],
+            "commands": [m["linux"]["command"], *m["linux"].get("links", {})],
             "formerNames": m["linux"].get("formerNames", []),
             "arch": sorted(p["arch"] for p in latest),
             "deb": {"arch": sorted(p["deb_arch"] for p in latest),
