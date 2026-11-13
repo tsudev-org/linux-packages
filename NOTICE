@@ -1,0 +1,15 @@
+linux-packages - kho APT/RPM pkg.tsudev.com
+Copyright 2026 tsudev - https://tsudev.com
+
+This repository (packaging tools, repository Worker and signing public keys) is developed and
+owned by tsudev. It is licensed under the Apache License, Version 2.0 (see LICENSE).
+Under section 4(d) of that license, any redistribution or derivative work MUST keep this NOTICE
+file, and all copyright, patent, trademark and attribution notices, intact.
+
+The packages published at https://pkg.tsudev.com contain tsudev products under their own licenses
+(e.g. lotus-share: Apache-2.0, a fork of LocalSend; tsudev-files: MIT, a fork of Filee); see the
+License field of each package and the repository of each product.
+
+The name "tsudev", the tsudev logo and the product names and logos of the tsudev ecosystem are
+trademarks of tsudev. The Apache License does NOT grant permission to use them (section 6).
+See https://github.com/tsudev-org/tsudev/blob/main/TRADEMARKS.md

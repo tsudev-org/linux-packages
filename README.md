@@ -105,3 +105,6 @@ khối "Cài bằng lệnh" - không gõ tay tên gói, nên không bao giờ hi
 ## Giấy phép
 
 Công cụ trong repo này: Apache-2.0. Mỗi gói giữ giấy phép của sản phẩm gốc (trường `License` / `license` trong gói).
+Bản phân phối lại phải giữ `NOTICE` (Apache-2.0 điều 4(d)). Tên và logo tsudev là nhãn hiệu, không nằm trong giấy phép:
+xem [TRADEMARKS.md](https://github.com/tsudev-org/tsudev/blob/main/TRADEMARKS.md). PR chạm `LICENSE`, `NOTICE`, `keys/` hoặc
+xoá dòng bản quyền cần chủ sở hữu phê duyệt (check `Bảo vệ bản quyền`, xem `AGENTS.md`).

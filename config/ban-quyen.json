@@ -1,0 +1,25 @@
+{
+  "_ghi_chu": "Cấu hình cổng `Bảo vệ bản quyền` (scripts/bao-ve-ban-quyen.mjs, .github/workflows/bao-ve-ban-quyen.yml). Tệp này TỰ được bảo vệ: sửa nó cần phê duyệt của người trong `nguoi_duyet`. `nguoi_duyet` CHỈ gồm tài khoản GitHub mà KHÔNG phiên Agent AI nào đăng nhập (chủ dự án chốt 13/11/2026: nguyentrangtinhsu). Thêm tài khoản agent vào đây là vô hiệu hoá toàn bộ cơ chế.",
+  "nguoi_duyet": [
+    "nguyentrangtinhsu"
+  ],
+  "duong_dan_bao_ve": [
+    "LICENSE",
+    "NOTICE",
+    "config/ban-quyen.json",
+    "scripts/bao-ve-ban-quyen.mjs",
+    ".github/workflows/bao-ve-ban-quyen.yml",
+    ".github/workflows/bao-ve-ban-quyen-tu-kiem.yml",
+    ".github/CODEOWNERS",
+    ".github/FUNDING.yml",
+    "keys/"
+  ],
+  "dau_hieu_bao_ve": [
+    "Copyright",
+    "©",
+    "SPDX-License-Identifier",
+    "Licensed under the Apache License",
+    "All rights reserved",
+    "trademark"
+  ]
+}
