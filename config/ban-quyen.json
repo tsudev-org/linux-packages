@@ -8,8 +8,7 @@
     "NOTICE",
     "config/ban-quyen.json",
     "scripts/bao-ve-ban-quyen.mjs",
-    ".github/workflows/bao-ve-ban-quyen.yml",
-    ".github/workflows/bao-ve-ban-quyen-tu-kiem.yml",
+    ".github/workflows/",
     ".github/CODEOWNERS",
     ".github/FUNDING.yml",
     "keys/"

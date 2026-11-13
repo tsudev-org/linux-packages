@@ -11,7 +11,7 @@ Mọi Agent AI / LLM / lập trình viên `MUST NOT` tự xoá, sửa hay làm y
 
 - `LICENSE`, `NOTICE`, mọi dòng `Copyright` / `©` / `SPDX-License-Identifier`, ở bất kỳ tệp nào;
 - tên sản phẩm, mô tả sở hữu ("một sản phẩm của tsudev"), kênh ủng hộ;
-- danh sách ở `config/ban-quyen.json` và chính cổng bảo vệ (`scripts/bao-ve-ban-quyen.mjs`, workflow `Bảo vệ bản quyền`).
+- danh sách ở `config/ban-quyen.json`, chính cổng bảo vệ (`scripts/bao-ve-ban-quyen.mjs`) và MỌI workflow (`.github/workflows/`).
 
 Việc thi hành KHÔNG dựa vào sự tự giác của agent. Check bắt buộc `Bảo vệ bản quyền` (ruleset riêng, không ai được vượt)
 chặn merge mọi PR chạm các thứ trên. Check chỉ qua khi chủ sở hữu PHÊ DUYỆT trên GitHub bằng tài khoản `nguyentrangtinhsu`
