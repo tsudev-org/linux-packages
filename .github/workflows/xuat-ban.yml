@@ -5,6 +5,17 @@ name: xuat-ban
 on:
   push:
     branches: [main]
+    # Doi tai lieu / cong ban quyen / Worker khong anh huong kho: bo qua, de khong sinh luot cho duyet Environment
+    # `packages` (luot cho duyet chan concurrency, ca luot kiem moi gio). Worker co worker.yml rieng.
+    paths-ignore:
+      - 'logs/**'
+      - '**.md'
+      - 'NOTICE'
+      - 'config/ban-quyen.json'
+      - 'scripts/bao-ve-ban-quyen*'
+      - '.github/workflows/bao-ve-ban-quyen*'
+      - '.github/workflows/worker.yml'
+      - 'worker/**'
   schedule:
     - cron: '41 * * * *'
   workflow_dispatch:
