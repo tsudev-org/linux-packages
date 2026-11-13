@@ -1,5 +1,4 @@
 linux-packages - kho APT/RPM pkg.tsudev.com
-Copyright 2026 tsudev - https://tsudev.com
 
 This repository (packaging tools, repository Worker and signing public keys) is developed and
 owned by tsudev. It is licensed under the Apache License, Version 2.0 (see LICENSE).
