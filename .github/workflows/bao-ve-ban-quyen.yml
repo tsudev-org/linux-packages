@@ -1,0 +1,46 @@
+name: Bảo vệ bản quyền
+
+# Mọi PR chạm nội dung sở hữu của tsudev (giấy phép, NOTICE, nhãn hiệu, logo, mô tả sở hữu, kênh
+# ủng hộ, script cài) hoặc XOÁ dòng bản quyền ở bất kỳ tệp nào phải được chủ sở hữu phê duyệt trên
+# đúng commit đầu PR (config/ban-quyen.json). Là check BẮT BUỘC của branch protection `main`.
+#
+# `pull_request_target` là CỐ Ý: mã cổng lấy từ nhánh GỐC nên PR không sửa được cổng để tự cho qua.
+# An toàn vì job KHÔNG checkout mã của PR, KHÔNG chạy gì từ PR, token chỉ đọc - chỉ đọc danh sách
+# tệp đổi + đánh giá qua API. Chủ sở hữu duyệt xong thì gắn nhãn bất kỳ (sự kiện `labeled`) hoặc
+# bấm Re-run để cổng chạy lại.
+#
+# Job tự kiểm (node --test) nằm ở bao-ve-ban-quyen-tu-kiem.yml: để chung tệp thì sự kiện `pull_request`
+# sinh thêm một check TRÙNG TÊN ở trạng thái skipped - skipped được tính là đạt với required check.
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] - không checkout/chạy mã của PR (xem trên)
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bao-ve-ban-quyen-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  cong:
+    name: Bảo vệ bản quyền
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      # Checkout NHÁNH GỐC (mặc định của pull_request_target) - không phải mã của PR.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - name: Kiểm phê duyệt của chủ sở hữu
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/bao-ve-ban-quyen.mjs
+
