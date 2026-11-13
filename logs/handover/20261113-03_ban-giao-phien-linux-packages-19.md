@@ -72,3 +72,7 @@ xoá dòng `Copyright` / `©` / `SPDX-License-Identifier` sẽ bị check bắt 
       thì phê duyệt cũ mất hiệu lực, vì ruleset `Bao ve main` đặt `strict`. Từ nay sửa workflow cũng cần chủ sở hữu duyệt.
     - Lượt kiểm theo giờ chạy lại bình thường (43384247409 xanh, "Kho da moi nhat"). Không còn Issue mở.
     - Chờ repo khác, không đổi: cwico chưa có `SHA256SUMS.txt`; tsudev-files vẫn `v2.4.0-vn.1`; game `channels` = `[]`.
+  - **Repo `tsudev-files` đổi tên thành `tsudev-org/tsufiles`** (phiếu toàn hệ 20261113-04, phiên `tsudev-files-8d`).
+    Đã đổi URL repo ở linux-packages#25, scoop-bucket#8, homebrew-tap#5 (merge). `plan` không đổi; lượt `xuat-ban`
+    43398365617 đã hủy. KHÔNG tạo lại repo tên `tsudev-files` (`~/.claude/CLAUDE.md`). Mục 3.4 của phiếu 1e (tên gói
+    `tsufiles` ở 2.4.1) vẫn chờ tag v2.4.1-vn.*. Làm theo phiếu 20261113-04 mục 2-3.
