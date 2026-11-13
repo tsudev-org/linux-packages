@@ -34,7 +34,30 @@ khóa công khai ở [`keys/`](keys/).
 | `tools/day-len-r2.sh` | Đẩy lên R2 theo thứ tự an toàn (gói → siêu dữ liệu → chỉ mục đã ký → `manifest.json`), xóa gói cũ ngoài 3 bản |
 | `tools/kiem-cai.sh` | Cài **thật** bằng đúng lệnh trên website trong container sạch, kiểm thư viện, gỡ sạch |
 | `.github/workflows/ci.yml` | Mỗi PR: dựng toàn bộ kho bằng khóa tạm, cài thử trên Ubuntu 22.04/24.04, Debian 12/13, Fedora |
+| `worker/` + `.github/workflows/worker.yml` | Worker phục vụ `pkg.tsudev.com` từ R2 - xem mục dưới |
 | `.github/workflows/xuat-ban.yml` | Mỗi giờ: có bản phát hành mới thì xin duyệt Environment `packages`, ký bằng khóa con, đẩy R2, cài thật từ `pkg.tsudev.com` trên 5 bản phân phối + ARM64 (hỏng thì mở Issue) |
+
+## Tên miền `pkg.tsudev.com` (Worker trước R2)
+
+Tên miền tùy chỉnh của R2 không có "tài liệu chỉ mục": `/`, `/apt/`, `/rpm/` trả trang *Error 404 Object not found*
+của R2 dù `index.html` có trong bucket. Worker `pkg-tsudev` (`worker/src/index.js`, không thư viện ngoài) chạy trên
+route `pkg.tsudev.com/*`, đọc bucket qua binding R2:
+
+- `/` -> `index.html`; thư mục (`/apt/`, `/rpm/x86_64/`...) -> danh sách sinh từ R2; `/apt` -> 301 `/apt/`;
+  404 tiếng Việt; chỉ `GET`/`HEAD`/`OPTIONS` (khác -> 405).
+- `Range` tự phân tích theo RFC 9110 (`a-b`, `a-`, `-n`; vượt cuối -> 416 `bytes */size`; `If-Range`) - apt/dnf tải tiếp;
+  `If-None-Match` / `If-Modified-Since` -> 304; giữ `Content-Type` / `Cache-Control` đã ghi khi đẩy lên R2.
+- Header: HSTS, `nosniff`, `Referrer-Policy`, `X-Frame-Options`, CSP cho HTML; CORS `*` (mọi nội dung kho công khai).
+- Gói `.deb` / `.rpm` (bất biến) được đệm ở biên Cloudflare.
+
+Kiểm: `cd worker && npm test` (bucket giả), `npx wrangler@4.158.0 dev --local` (workerd thật, R2 cục bộ), và
+`tools/kiem-ten-mien.sh <gốc>` trên tên miền thật (sau mỗi lần triển khai + mỗi ngày khi biến repo `PKG_WORKER=on`).
+
+**Triển khai** (`worker.yml`, khi `worker/` đổi trên `main`, cần duyệt Environment `packages`): cần secret
+`CLOUDFLARE_API_TOKEN` trong Environment `packages` - token tạo tại *Cloudflare → My Profile → API Tokens → Create
+Token → Custom*, chỉ hai quyền: **Account · Workers Scripts · Edit** (tài khoản `CLOUDFLARE_ACCOUNT_ID`) và
+**Zone · Workers Routes · Edit** (zone `tsudev.com`). Chưa có token thì workflow bỏ qua kèm cảnh báo. Lần triển khai đầu
+thành công: `gh variable set PKG_WORKER --body on` để bật kiểm tên miền hằng ngày.
 
 ## `catalog.json` - nguồn cho website và script cài đặt
 

@@ -1,0 +1,67 @@
+name: worker
+# Worker phuc vu https://pkg.tsudev.com tu R2 (worker/): `/` -> index.html, danh sach thu muc, 404 tieng Viet,
+# header bao mat, Range/ETag. Trien khai khi worker/ doi tren main (can duyet Environment `packages`), roi
+# kiem tren ten mien that. Moi ngay kiem lai trang goc de bat loi cau hinh (vd route Worker bi go).
+on:
+  push:
+    branches: [main]
+    paths: ['worker/**', '.github/workflows/worker.yml']
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: worker
+  cancel-in-progress: false
+jobs:
+  trien-khai:
+    name: Trien khai Worker pkg-tsudev
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    environment: packages
+    outputs:
+      xong: ${{ steps.tk.outputs.xong }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Kiem don vi
+        working-directory: worker
+        run: npm test
+      - name: Trien khai
+        id: tk
+        working-directory: worker
+        env:
+          # API token Cloudflare: Workers Scripts:Edit (tai khoan) + Workers Routes:Edit (zone tsudev.com). Khong can quyen R2.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::warning::Chua co secret CLOUDFLARE_API_TOKEN trong Environment packages - bo qua trien khai (README muc 'Ten mien pkg.tsudev.com')"
+            exit 0
+          fi
+          npx --yes wrangler@4.158.0 deploy
+          echo "xong=true" >> "$GITHUB_OUTPUT"
+
+  kiem-ten-mien:
+    name: Kiem https://pkg.tsudev.com
+    needs: trien-khai
+    # Lich hang ngay chi chay sau khi Worker da len (bien repo PKG_WORKER=on, dat sau lan trien khai dau).
+    if: always() && (needs.trien-khai.outputs.xong == 'true' || (github.event_name == 'schedule' && vars.PKG_WORKER == 'on'))
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: tools/kiem-ten-mien.sh https://pkg.tsudev.com
+
+  bao-loi:
+    name: Mo Issue khi trang kho hong
+    needs: [trien-khai, kiem-ten-mien]
+    if: failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create -R "${{ github.repository }}" --title "pkg.tsudev.com: Worker/trang goc hong ($(date -u +%d/%m/%Y))" \
+            --body "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

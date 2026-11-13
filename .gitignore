@@ -4,3 +4,5 @@ __pycache__/
 plan.json
 moi.json
 cu.json
+worker/.wrangler/
+node_modules/
