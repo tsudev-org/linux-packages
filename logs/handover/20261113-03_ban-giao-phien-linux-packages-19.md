@@ -57,3 +57,10 @@ xoá dòng `Copyright` / `©` / `SPDX-License-Identifier` sẽ bị check bắt 
     phân công của chủ dự án. Phiên linux-packages KHÔNG sửa `excavator.yml` / `cap-nhat.yml` hay cấu hình hai repo đó
     khi chưa phối hợp với `tsudev-06`. Đã báo `tsudev-06`: tạo key sau khi scoop-bucket #6 merge; ruleset cấp repo
     nhận được bypass `DeployKey` nhưng không nhận GitHub Actions.
+  - **Hàng đợi `xuat-ban` bị kẹt (chủ dự án đồng ý xử lý):** lượt 43358802419 (push khi merge #15) chờ duyệt Environment
+    `packages` khoảng 2,5 giờ. Nó chặn concurrency, nên không có lượt kiểm theo giờ nào từ 23:51 UTC 12/11. Đã `gh run cancel`
+    lượt đó và 43368233556, 43376038696 (cùng nội dung với lượt xanh 43355946014). Đóng Issue #5 (lỗi ngày 11/11, đã khắc phục).
+    PR #21 (merge): trigger `push` của `xuat-ban.yml` bỏ qua `logs/**`, `**.md`, `NOTICE`, tệp cổng bản quyền, `worker.yml`,
+    `worker/**`. Từ nay merge PR tài liệu không còn sinh lượt chờ duyệt.
+    **Bẫy cho phiên sau:** PR sửa tệp khác (vd `products.json`, `tools/`) vẫn sinh lượt chờ duyệt, đúng thiết kế. Hoặc
+    duyệt (hỏi chủ dự án), hoặc `gh run cancel` để lượt lịch tự lo. Đừng để treo.
