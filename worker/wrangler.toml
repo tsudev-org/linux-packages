@@ -1,0 +1,14 @@
+# Worker phuc vu https://pkg.tsudev.com tu bucket R2 pkg-tsudev (README muc "Ten mien pkg.tsudev.com").
+# Trien khai: .github/workflows/worker.yml (Environment `packages`, secret CLOUDFLARE_API_TOKEN).
+name = "pkg-tsudev"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = false
+routes = [{ pattern = "pkg.tsudev.com/*", zone_name = "tsudev.com" }]
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "pkg-tsudev"
+
+[observability]
+enabled = true
