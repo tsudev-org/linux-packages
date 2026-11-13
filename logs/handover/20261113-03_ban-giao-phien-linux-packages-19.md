@@ -64,3 +64,9 @@ xoá dòng `Copyright` / `©` / `SPDX-License-Identifier` sẽ bị check bắt 
     `worker/**`. Từ nay merge PR tài liệu không còn sinh lượt chờ duyệt.
     **Bẫy cho phiên sau:** PR sửa tệp khác (vd `products.json`, `tools/`) vẫn sinh lượt chờ duyệt, đúng thiết kế. Hoặc
     duyệt (hỏi chủ dự án), hoặc `gh run cancel` để lượt lịch tự lo. Đừng để treo.
+  - **Trạng thái lúc đóng phiên (13/11/2026):**
+    - scoop-bucket #6 đã merge (`nguyentrangtinhsu`, 05:58 UTC). scoop-bucket đã có ruleset `Bao ve ban quyen`
+      (id 27180814) và một deploy key, do phiên `tsudev-06` dựng.
+    - **linux-packages #18 vẫn MỞ, chờ chủ sở hữu duyệt.** Đây là việc đầu tiên của phiên sau: nhắc chủ dự án, không merge vượt.
+    - Lượt kiểm theo giờ chạy lại bình thường (43384247409 xanh, "Kho da moi nhat"). Không còn Issue mở.
+    - Chờ repo khác, không đổi: cwico chưa có `SHA256SUMS.txt`; tsudev-files vẫn `v2.4.0-vn.1`; game `channels` = `[]`.
