@@ -3,7 +3,7 @@
 - **Mã phiếu**: 20261113-02
 - **Từ**: phiên `linux-packages-1e` (12-13/11/2026) - **Đến**: phiên kế tiếp của repo `tsudev-org/linux-packages`
 - **Thời điểm**: 13/11/2026
-- **Trạng thái**: MỞ - việc số 1 ở mục 3 làm NGAY khi vào phiên
+- **Trạng thái**: MỞ một phần - mục 3.1 XONG (13/11/2026, phiên `linux-packages-19`); 3.2-3.4 còn chờ repo khác
 
 ## 0. Quy tắc bắt buộc (đọc trước)
 
@@ -111,4 +111,19 @@ Kho tự sinh gói chuyển tiếp `.deb` và Provides/Obsoletes cho `.rpm`. CI 
 
 ## 4. Kết quả xử lý (phiên nhận điền)
 
--
+- 13/11/2026 - phiên `linux-packages-19`: **MỤC 3.1 XONG, `https://pkg.tsudev.com/` hết 404.**
+  - Chủ dự án ủy quyền triển khai production trong phiên này, nên phiên tự duyệt Environment `packages` qua API.
+  - `worker.yml` lượt 43355653437 (workflow_dispatch) xanh. Token chạy thật lần đầu, đủ quyền:
+    `Deployed pkg-tsudev triggers … pkg.tsudev.com/* (zone name: tsudev.com)`, Version `6e967886-c399-4e64-b5c9-953bc3819cb1`.
+    Route Worker đè được tên miền tùy chỉnh của R2, nên KHÔNG phải đổi DNS hay dùng `custom_domain`.
+  - `tools/kiem-ten-mien.sh https://pkg.tsudev.com` đạt 10/10, cả trong CI lẫn chạy tay. Kiểm tay thêm: `/` 200 có
+    HSTS/CSP/nosniff/Referrer-Policy; `/apt/` ra trang liệt kê; `catalog.json` có `Access-Control-Allow-Origin: *`;
+    `Range: bytes=0-99` trả 206.
+  - Đã đặt `PKG_WORKER=on`, từ nay kiểm tên miền mỗi ngày lúc 03:23 UTC.
+  - `xuat-ban.yml` lượt 43355946014 xanh toàn bộ: cài thật từ `https://pkg.tsudev.com` qua Worker trên Ubuntu 22.04/24.04,
+    Debian 12/13, Fedora, x64 và arm64.
+  - Đã nhắn phiên `tsudev-06` về CORS của `catalog.json`.
+  - Mục 3.2: Release `tsudev-cwico-v26.11.10.2` vẫn CHƯA có `SHA256SUMS.txt`, phiếu cwico 20261113-02 còn MỞ, nên chưa làm.
+  - Mục 3.3: phiếu game 20261113-01 vẫn MỞ. `…-releases/packaging/package.json` vẫn để `channels` = `[]`,
+    `planned` = `apt, rpm, winget, scoop`. Phiếu tsudev-files 20261113-02 (phụ thuộc Linux) đã xử lý.
+  - Mục 3.4: chưa có tin đổi tên `tsufiles` (latest vẫn `v2.4.0-vn.1`). Phiên `tsudev-files-8d` đang chạy, họ sẽ nhắn trước.
