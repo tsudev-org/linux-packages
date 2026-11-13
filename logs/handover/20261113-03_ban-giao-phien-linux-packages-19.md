@@ -67,6 +67,8 @@ xoá dòng `Copyright` / `©` / `SPDX-License-Identifier` sẽ bị check bắt 
   - **Trạng thái lúc đóng phiên (13/11/2026):**
     - scoop-bucket #6 đã merge (`nguyentrangtinhsu`, 05:58 UTC). scoop-bucket đã có ruleset `Bao ve ban quyen`
       (id 27180814) và một deploy key, do phiên `tsudev-06` dựng.
-    - **linux-packages #18 vẫn MỞ, chờ chủ sở hữu duyệt.** Đây là việc đầu tiên của phiên sau: nhắc chủ dự án, không merge vượt.
+    - **linux-packages #18: XONG.** `nguyentrangtinhsu` duyệt; cổng ghi "ĐẠT - chủ sở hữu đã phê duyệt commit 6b12b23"; đã merge (`1223d21`).
+      Bài học: PR chạm tệp bảo vệ mà bị `BEHIND` thì cập nhật nhánh TRƯỚC, rồi mới nhờ chủ sở hữu duyệt. Commit đầu đổi
+      thì phê duyệt cũ mất hiệu lực, vì ruleset `Bao ve main` đặt `strict`. Từ nay sửa workflow cũng cần chủ sở hữu duyệt.
     - Lượt kiểm theo giờ chạy lại bình thường (43384247409 xanh, "Kho da moi nhat"). Không còn Issue mở.
     - Chờ repo khác, không đổi: cwico chưa có `SHA256SUMS.txt`; tsudev-files vẫn `v2.4.0-vn.1`; game `channels` = `[]`.
