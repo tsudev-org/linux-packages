@@ -609,6 +609,10 @@ def cmd_build(args) -> None:
                     for r in paths:
                         (out / r).parent.mkdir(parents=True, exist_ok=True)
                         (out / r).write_bytes(http_get(f"{BASE_URL}/{r}"))
+                    # Ky lai rpm bang khoa cua LAN DUNG NAY (o production cung la khoa kho; o CI la khoa tam) de
+                    # `rpm -K` va dnf kiem cung mot khoa voi sieu du lieu.
+                    if (out / rpm_path(p)).exists():
+                        rebuilt_rpm.append(out / rpm_path(p))
                     log(f"ban cu khac bo cuc ({e}) - lay goi da phat hanh: {', '.join(paths)}")
     rpm_sign(out, args.key, rebuilt_rpm)
     apt_metadata(out, args.key, sorted({p["deb_arch"] for p in plan}))
