@@ -1,0 +1,29 @@
+# Doi chieu ba kenh goi (Scoop, Homebrew, APT/RPM) voi tep Release THAT cua repo app moi ngay - phieu 20261115-01
+# muc 2.2. Lech (hash sai, URL chet, kenh cham hon Release moi nhat) -> do. Khong phai check bat buoc cua PR.
+name: Doi chieu kenh goi
+
+on:
+  schedule:
+    - cron: '17 2 * * *'   # 09:17 gio Viet Nam
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/doi-chieu-kenh.mjs'
+      - '.github/workflows/doi-chieu-kenh.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  doi-chieu:
+    name: Doi chieu kenh goi voi Release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Doi chieu
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tools/doi-chieu-kenh.mjs
