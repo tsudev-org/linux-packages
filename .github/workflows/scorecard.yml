@@ -1,0 +1,41 @@
+# linux-packages: OpenSSF Scorecard - chấm điểm thực hành bảo mật chuỗi cung ứng (bảo vệ nhánh, ghim SHA, quyền token,
+# review...) và đẩy SARIF vào Security > Code scanning (category "scorecard"). Chép từ mẫu của repo tsudev
+# (phiếu 20261113-03, P1.3). KHÔNG phải cổng PR: chạy trên `main` và theo lịch để thấy điểm trôi theo thời gian;
+# không thêm vào ruleset. Chỉ tải SARIF lên - CodeQL dùng default setup của org.
+name: OpenSSF Scorecard
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '41 3 * * 2'   # 10:41 thứ Ba giờ Việt Nam
+  workflow_dispatch:
+  # Cho phép check "Branch-Protection" đọc cấu hình của chính nó.
+  branch_protection_rule:
+
+permissions: {}
+
+jobs:
+  analysis:
+    name: scorecard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Tải SARIF vào code scanning.
+      security-events: write
+      # Ký kết quả khi công bố lên api.securityscorecards.dev (repo Public, cần cho huy hiệu README).
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
+        with:
+          sarif_file: results.sarif
+          category: scorecard
