@@ -283,6 +283,10 @@ def build_transitional(m: dict, p: dict, work: Path, out: Path, nfpm: str) -> No
     shutil.rmtree(stage)
 
 
+class BoCucCu(Exception):
+    """Tep trong tar khong khop khai bao package.json hien tai (ban cu, bo cuc truoc khi doi ten)."""
+
+
 def build_one(m: dict, p: dict, work: Path, out: Path, nfpm: str) -> None:
     dl = work / p["asset"]
     log(f"tai {p['asset_url']}")
@@ -307,7 +311,7 @@ def build_one(m: dict, p: dict, work: Path, out: Path, nfpm: str) -> None:
     lx = m["linux"]
     bin_rel = m["assets"][f"linux-{p['arch']}"]["bin"]
     if not (root / bin_rel).is_file():
-        raise SystemExit(f"{p['asset']} khong co tep chay {bin_rel}")
+        raise BoCucCu(f"{p['asset']} khong co tep chay {bin_rel}")
     (stage / f"{m['name']}.desktop").write_text(desktop_entry(m, desktop_exec(m, root)), encoding="utf-8")
 
     opt = f"/opt/{m['name']}"
@@ -576,6 +580,9 @@ def cmd_build(args) -> None:
     if not plan:
         raise SystemExit("khong co goi nao de dung")
     byname = {m["name"]: m for m in products}
+    newest: dict[str, str] = {}
+    for p in plan:  # plan_product xep moi nhat truoc
+        newest.setdefault(p["name"], p["tag"])
     rebuilt_rpm: list[Path] = []
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
@@ -590,8 +597,23 @@ def cmd_build(args) -> None:
             elif p.get("transitional_for"):
                 build_transitional(byname[p["transitional_for"]], p, work, out, args.nfpm)
             else:
-                build_one(byname[p["name"]], p, work, out, args.nfpm)
-                rebuilt_rpm.append(out / rpm_path(p))
+                try:
+                    build_one(byname[p["name"]], p, work, out, args.nfpm)
+                    rebuilt_rpm.append(out / rpm_path(p))
+                except BoCucCu as e:
+                    # Ban CU dong goi theo bo cuc truoc (vd tsudev-files 2.4.0 co filee-cli, khai bao hien tai la
+                    # tsufiles-cli tu 2.4.1): khong dung lai duoc theo package.json moi - lay goi DA PHAT HANH, da ky.
+                    # Ban moi nhat KHONG bao gio di nhanh nay: no phai khop khai bao hien tai.
+                    if p["tag"] == newest[p["name"]] or not all(http_exists(f"{BASE_URL}/{r}") for r in paths):
+                        raise SystemExit(str(e))
+                    for r in paths:
+                        (out / r).parent.mkdir(parents=True, exist_ok=True)
+                        (out / r).write_bytes(http_get(f"{BASE_URL}/{r}"))
+                    # Ky lai rpm bang khoa cua LAN DUNG NAY (o production cung la khoa kho; o CI la khoa tam) de
+                    # `rpm -K` va dnf kiem cung mot khoa voi sieu du lieu.
+                    if (out / rpm_path(p)).exists():
+                        rebuilt_rpm.append(out / rpm_path(p))
+                    log(f"ban cu khac bo cuc ({e}) - lay goi da phat hanh: {', '.join(paths)}")
     rpm_sign(out, args.key, rebuilt_rpm)
     apt_metadata(out, args.key, sorted({p["deb_arch"] for p in plan}))
     rpm_metadata(out, args.key)
