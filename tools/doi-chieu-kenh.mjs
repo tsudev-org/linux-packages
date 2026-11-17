@@ -31,7 +31,7 @@ async function get(url, { json = true, ok404 = false } = {}) {
   for (let i = 0; i < 4; i++) {
     let r;
     try {
-      r = await fetch(url, { headers: url.startsWith(API) ? headers : { 'user-agent': headers['user-agent'] } });
+      r = await fetch(url, { headers: new URL(url).origin === API ? headers : { 'user-agent': headers['user-agent'] } });
     } catch (e) {
       if (i === 3) throw e;
       await new Promise((s) => setTimeout(s, 1500 * (i + 1)));
