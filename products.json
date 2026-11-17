@@ -2,6 +2,7 @@
   "products": [
     { "repo": "tsudev-org/lotus-share", "ref": "main", "tenRieng": "lotus-share" },
     { "repo": "tsudev-org/tsufiles", "ref": "main" },
-    { "repo": "TsuGameLabs/tsudev-luyen-go-phim-releases", "ref": "main" }
+    { "repo": "TsuGameLabs/tsudev-luyen-go-phim-releases", "ref": "main" },
+    { "repo": "tsudev-org/sound-db", "ref": "main" }
   ]
 }
