@@ -11,6 +11,11 @@
 //   - APT/RPM (pkg.tsudev.com/catalog.json): `tag` của gói là Release mới nhất của `releaseRepo`, mọi tệp .deb/.rpm
 //     trong `files` trả 200. (Gói deb/rpm được DỰNG LẠI bằng nfpm từ tệp Release đã kiểm sha256 lúc dựng - xem
 //     tools/dung_kho.py build_one - nên sha256 của .deb không so được với tệp Release; ở đây chỉ canh độ trễ.)
+//   - Khuôn thẻ (VERSIONING.md v3 mục 2.2, phiếu 20261117-V1 bước 9) - chỉ LƯU Ý, không làm đỏ:
+//     (a) thẻ Release mới nhất của mỗi repo app có khớp `vYY.M.DDNN[-beta.N|-rc.N]` không (thẻ cũ bất biến, khuôn mới
+//         áp cho bản KẾ TIẾP); (b) `checkver` Scoop / `livecheck` Homebrew có nhận một thẻ khuôn mới không - không nhận
+//         thì ngày app đổi khuôn kênh đó đứng ở bản cũ IM LẶNG, phải sửa cùng PR đổi khuôn của app.
+//     (APT/RPM đọc `release.tagRegex` trong `packaging/package.json` của từng app - kiểm ở repo app, không ở đây.)
 //
 // Không phụ thuộc gói npm nào (fetch của Node 20+).
 
@@ -54,7 +59,21 @@ async function head(url) {
 
 const cache = new Map();
 const once = (k, f) => (cache.has(k) ? cache.get(k) : (cache.set(k, f()), cache.get(k)));
-const latest = (repo) => once(`latest:${repo}`, () => get(`${API}/repos/${repo}/releases/latest`));
+const daXemRepo = new Set();
+const latest = (repo) => (daXemRepo.add(repo), once(`latest:${repo}`, () => get(`${API}/repos/${repo}/releases/latest`)));
+
+// Khuôn thẻ VERSIONING.md v3 mục 2.2 + một thẻ mẫu theo khuôn đó để thử regex của kênh.
+const KHUON_THE = /^v\d{2}\.\d{1,2}\.\d{4}(-(beta|rc)\.\d+)?$/;
+const THE_MAU = 'v26.11.1801';
+const luuY = [];
+/** Regex của kênh (cú pháp .NET/Ruby: `(?<ten>` dùng được nguyên trong JS) có bắt được thẻ mẫu khuôn mới không. */
+function nhanKhuonMoi(nguon, mau = THE_MAU) {
+  try {
+    return new RegExp(nguon, 'i').test(mau);
+  } catch {
+    return null;
+  }
+}
 const byTag = (repo, tag) =>
   once(`tag:${repo}:${tag}`, () => get(`${API}/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`, { ok404: true }));
 
@@ -97,6 +116,13 @@ async function scoop() {
       const hs = [].concat(h ?? []);
       us.forEach((x, i) => cap.push([x.split('#')[0], hs[i]]));
     };
+    const cv = m.checkver;
+    if (cv && typeof cv === 'object' && cv.regex) {
+      // checkver đọc thẳng JSON (không jsonpath) thì thử trên đoạn JSON chứa thẻ mẫu.
+      const mau = cv.jsonpath ? THE_MAU : `"tag_name": "${THE_MAU}"`;
+      if (nhanKhuonMoi(cv.regex, mau) === false)
+        luuY.push(`scoop ${goi}: checkver.regex chưa nhận thẻ khuôn mới (${THE_MAU}) - sửa checkver + autoupdate cùng PR đổi khuôn của app`);
+    }
     them(m.url, m.hash);
     for (const a of Object.values(m.architecture ?? {})) them(a.url, a.hash);
     if (cap.length === 0) {
@@ -136,6 +162,9 @@ async function homebrew() {
       const shas = [...rb.matchAll(/^\s*sha256\s+"([0-9a-f]{64})"/gm)].map((x) => x[1]);
       if (shas.length === urls.length) cap = urls.map((u, i) => [u, shas[i]]);
     }
+    const lc = rb.match(/livecheck do[\s\S]*?regex\(\/(.*)\/[a-z]*\)/);
+    if (lc && nhanKhuonMoi(lc[1]) === false)
+      luuY.push(`brew ${goi}: livecheck regex chưa nhận thẻ khuôn mới (${THE_MAU}) - sửa livecheck + url cùng PR đổi khuôn của app`);
     if (!version || cap.length === 0) {
       ghi('brew', goi, 'LỆCH', `không đọc được cask (version=${version}, url=${urls.length})`);
       continue;
@@ -185,8 +214,21 @@ for (const [ten, f] of [
   }
 }
 
+for (const repo of [...daXemRepo].sort()) {
+  try {
+    const t = (await latest(repo)).tag_name;
+    if (!KHUON_THE.test(t)) luuY.push(`${repo}: thẻ mới nhất ${t} lệch khuôn vYY.M.DDNN - bản KẾ TIẾP theo VERSIONING.md mục 2.2`);
+  } catch {
+    /* lỗi tải đã ghi ở bước kênh */
+  }
+}
+
 const w = [0, 1, 2].map((i) => Math.max(...dong.map((d) => d[i].length)));
 for (const d of dong) console.log(d.slice(0, 3).map((c, i) => c.padEnd(w[i])).join('  '), ' ', d[3]);
+if (luuY.length) {
+  console.log(`\n${luuY.length} lưu ý khuôn thẻ (không làm đỏ):`);
+  for (const l of [...new Set(luuY)].sort()) console.log(` - ${l}`);
+}
 if (loi.length) {
   console.error(`\n${loi.length} lệch:`);
   for (const l of loi) console.error(` - ${l}`);
