@@ -1,0 +1,16 @@
+# Nâng phiên bản định kỳ (phiếu AN1, 18/11/2026). Cảnh báo + PR vá bảo mật do "Dependabot security updates"
+# (đã bật trong Settings) lo; tệp này lo nâng thường kỳ, gom nhóm để mỗi tuần chỉ vài PR.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci(deps)"
